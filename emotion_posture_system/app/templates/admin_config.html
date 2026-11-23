@@ -1,0 +1,550 @@
+{% extends "base.html" %} {% block title %}Cấu hình hệ thống & Huấn luyện AI{%
+endblock %} {% block content %}
+<div class="space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-cyan-400">
+      Cấu hình tham số, Mô hình & Huấn luyện AI
+    </h2>
+    <p class="text-sm text-slate-400 mt-1">
+      Thiết lập nguồn camera 1280×720, ngưỡng sinh trắc học, ngưỡng tin cậy &
+      bước trượt suy luận (60 khung hình), nạp trọng số hoặc huấn luyện lại
+      BiGRU.
+    </p>
+  </div>
+
+  <div
+    id="cfg-toast"
+    class="hidden p-3.5 rounded-xl text-sm font-medium border"
+  ></div>
+
+  <!-- KHỐI 1: CẤU HÌNH PHẦN CỨNG, NGƯỠNG CẢNH BÁO & THAM SỐ SUY LUẬN AI -->
+  <form
+    id="config-form"
+    onsubmit="saveConfig(event)"
+    class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6"
+  >
+    <div
+      class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3"
+    >
+      <h3 class="text-base font-bold text-slate-100">
+        1. Tham số thiết bị ghi hình, Công thái học & Suy luận BiGRU
+      </h3>
+      <span class="text-xs font-mono text-slate-400"
+        >Tệp thiết lập:
+        <strong class="text-cyan-300">data/system_settings.json</strong></span
+      >
+    </div>
+
+    <!-- Nguồn camera & chuẩn phân giải -->
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 text-sm">
+      <div class="md:col-span-8">
+        <label class="block text-xs text-slate-300 mb-1.5 font-semibold"
+          >Nguồn Camera (0 = Webcam laptop hoặc URL IP Camera điện thoại)</label
+        >
+        <input
+          id="camera_source"
+          type="text"
+          required
+          value="{{ config.camera_source }}"
+          placeholder="0 hoặc http://192.168.x.x:8080/video"
+          class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-cyan-300 font-mono text-sm focus:outline-none focus:border-cyan-400"
+        />
+      </div>
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-300 mb-1.5 font-semibold"
+          >Chuẩn phân giải đầu vào</label
+        >
+        <input
+          type="text"
+          disabled
+          value="1280 × 720 (HD Letterbox)"
+          class="w-full px-3.5 py-2 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-400 font-mono text-sm"
+        />
+      </div>
+    </div>
+
+    <!-- BỔ SUNG NHÓM 4: NGƯỠNG TIN CẬY (SLIDER %) & BƯỚC TRƯỢT DỰ ĐOÁN (SỐ KHUNG HÌNH) -->
+    <div
+      class="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-2xl bg-slate-950/75 border border-cyan-500/30"
+    >
+      <!-- Thanh trượt Slider phần trăm ngưỡng tin cậy dự đoán -->
+      <div class="space-y-2.5">
+        <div class="flex items-center justify-between">
+          <label
+            for="confidence_threshold"
+            class="text-xs font-bold text-cyan-300 uppercase tracking-wider"
+          >
+            Ngưỡng tin cậy dự đoán tối thiểu
+          </label>
+          <span
+            id="conf-slider-value"
+            class="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-mono text-sm font-extrabold"
+          >
+            {{ config.confidence_threshold | int }}%
+          </span>
+        </div>
+        <input
+          id="confidence_threshold"
+          type="range"
+          min="0"
+          max="95"
+          step="1"
+          value="{{ config.confidence_threshold | int }}"
+          oninput="updateConfidenceSliderUI(this.value)"
+          class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+        />
+        <div class="flex justify-between text-[11px] text-slate-500 font-mono">
+          <span>0% (Luôn nhận)</span>
+          <span>40% (Khuyến nghị)</span>
+          <span>95% (Rất chặt)</span>
+        </div>
+        <p class="text-xs text-slate-400">
+          Khi xác suất dự đoán cao nhất thấp hơn mức này, hệ thống sẽ hiển thị
+          trạng thái
+          <strong class="text-amber-300">"Không xác định"</strong> thay vì nhãn
+          kém tin cậy.
+        </p>
+      </div>
+
+      <!-- Ô nhập số khung hình bước trượt dự đoán -->
+      <div class="space-y-2.5">
+        <div class="flex items-center justify-between">
+          <label
+            for="inference_stride"
+            class="text-xs font-bold text-cyan-300 uppercase tracking-wider"
+          >
+            Bước trượt dự đoán (trên cửa sổ 60 khung hình)
+          </label>
+          <span
+            id="stride-badge"
+            class="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold"
+          >
+            Cân bằng
+          </span>
+        </div>
+        <div class="flex items-center gap-3">
+          <input
+            id="inference_stride"
+            type="number"
+            min="1"
+            max="60"
+            step="1"
+            required
+            value="{{ config.inference_stride }}"
+            oninput="updateStrideBadge(this.value)"
+            class="w-32 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-cyan-300 font-mono text-base font-bold focus:outline-none focus:border-cyan-400"
+          />
+          <span class="text-xs text-slate-300"
+            >khung hình / 1 lần suy luận BiGRU</span
+          >
+        </div>
+        <p class="text-xs text-slate-400">
+          Số khung hình giữa hai lần dự đoán liên tiếp (từ
+          <strong class="text-slate-200">1</strong> đến
+          <strong class="text-slate-200">60</strong>). Giá trị nhỏ cho kết quả
+          mượt hơn; giá trị lớn giúp giảm tải CPU/GPU.
+        </p>
+      </div>
+    </div>
+
+    <!-- Ngưỡng sinh trắc học buồn ngủ & công thái học -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >EAR Mức 1 (Mệt mỏi)</label
+        >
+        <input
+          id="ear_thresh_1"
+          type="number"
+          step="0.01"
+          required
+          value="{{ config.ear_thresh_1 }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >EAR Mức 2 (Nguy hiểm)</label
+        >
+        <input
+          id="ear_thresh_2"
+          type="number"
+          step="0.01"
+          required
+          value="{{ config.ear_thresh_2 }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >PERCLOS Mức 1 (%)</label
+        >
+        <input
+          id="perclos_thresh_1"
+          type="number"
+          step="1"
+          required
+          value="{{ config.perclos_thresh_1 }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >PERCLOS Mức 2 (%)</label
+        >
+        <input
+          id="perclos_thresh_2"
+          type="number"
+          step="1"
+          required
+          value="{{ config.perclos_thresh_2 }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >Góc cúi cổ tối đa (°)</label
+        >
+        <input
+          id="max_neck_angle"
+          type="number"
+          step="1"
+          required
+          value="{{ config.max_neck_angle }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >Độ lệch vai tối đa (°)</label
+        >
+        <input
+          id="max_shoulder_tilt"
+          type="number"
+          step="1"
+          required
+          value="{{ config.max_shoulder_tilt }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1"
+          >Ngưỡng RULA cảnh báo</label
+        >
+        <input
+          id="max_rula_score"
+          type="number"
+          step="0.5"
+          required
+          value="{{ config.max_rula_score }}"
+          class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+        />
+      </div>
+      <div class="flex items-end">
+        <button
+          type="submit"
+          class="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-cyan-500/20"
+        >
+          Lưu toàn bộ cấu hình
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <!-- KHỐI 2 & 3: QUẢN LÝ TRỌNG SỐ & HUẤN LUYỆN MÔ HÌNH -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Tải lên trọng số kiểm duyệt 22x15 -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      <h3
+        class="text-base font-bold text-slate-100 border-b border-slate-800 pb-3"
+      >
+        2. Nạp trọng số mô hình (.pth)
+      </h3>
+      <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+        <span class="text-slate-400">Trọng số đang kích hoạt:</span>
+        <div
+          id="active-model-text"
+          class="font-mono text-emerald-300 mt-1 break-all"
+        >
+          {{ config.active_model_path }}
+        </div>
+      </div>
+      <p class="text-xs text-slate-400">
+        Hệ thống tự động kiểm duyệt cấu trúc đầu vào
+        <strong>22 đặc trưng</strong> và đầu ra
+        <strong>15 lớp cảm xúc</strong> trước khi nạp nóng vào bộ nhớ suy luận.
+      </p>
+      <div class="flex flex-wrap items-center gap-3">
+        <input
+          id="weights-file-input"
+          type="file"
+          accept=".pth,.h5"
+          class="text-xs text-slate-400 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-cyan-300 hover:file:bg-slate-700 cursor-pointer"
+        />
+        <button
+          type="button"
+          onclick="uploadWeights()"
+          class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+        >
+          Kiểm tra & Nạp trọng số
+        </button>
+      </div>
+    </div>
+
+    <!-- Huấn luyện lại mô hình BiGRU -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      <div
+        class="flex items-center justify-between border-b border-slate-800 pb-3"
+      >
+        <h3 class="text-base font-bold text-slate-100">
+          3. Huấn luyện lại mô hình BiGRU
+        </h3>
+        <span class="text-xs text-cyan-300 font-mono"
+          >Kho ảnh hiện có: {{ existing_images_count }} ảnh</span
+        >
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 mb-1"
+            >Tải lên gói ảnh tiền xử lý (.zip — tùy chọn)</label
+          >
+          <input
+            id="dataset-zip-input"
+            type="file"
+            accept=".zip"
+            class="w-full text-xs text-slate-400 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-indigo-300 hover:file:bg-slate-700 cursor-pointer"
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 items-center">
+          <div>
+            <label class="block text-slate-300 mb-1"
+              >Số vòng huấn luyện (Epochs)</label
+            >
+            <input
+              id="train-epochs"
+              type="number"
+              min="2"
+              max="100"
+              value="20"
+              class="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono"
+            />
+          </div>
+          <div class="space-y-1.5 pt-4">
+            <label
+              class="flex items-center gap-2 text-slate-300 cursor-pointer"
+            >
+              <input
+                id="chk-skip-extract"
+                type="checkbox"
+                class="accent-cyan-400"
+              />
+              <span>Dùng lại tập .npy có sẵn</span>
+            </label>
+            <label
+              class="flex items-center gap-2 text-slate-300 cursor-pointer"
+            >
+              <input
+                id="chk-replace-imgs"
+                type="checkbox"
+                class="accent-cyan-400"
+              />
+              <span>Thay thế kho ảnh cũ</span>
+            </label>
+          </div>
+        </div>
+
+        <button
+          id="btn-start-train"
+          type="button"
+          onclick="startTraining()"
+          class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition"
+        >
+          Bắt đầu huấn luyện mô hình AI
+        </button>
+
+        <!-- Thanh tiến độ huấn luyện -->
+        <div
+          class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2"
+        >
+          <div class="flex justify-between text-[11px]">
+            <span id="train-status-msg" class="text-slate-300"
+              >Chưa có tiến trình huấn luyện nào đang chạy.</span
+            >
+            <span
+              id="train-pct-text"
+              class="font-mono text-indigo-300 font-bold"
+              >0%</span
+            >
+          </div>
+          <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              id="train-progress-bar"
+              class="h-full bg-indigo-500 transition-all duration-300"
+              style="width: 0%"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showCfgToast(msg, isErr = false) {
+    const el = document.getElementById("cfg-toast");
+    el.textContent = msg;
+    el.className = isErr
+      ? "p-3.5 rounded-xl text-sm font-medium border bg-rose-500/15 border-rose-500/40 text-rose-300"
+      : "p-3.5 rounded-xl text-sm font-medium border bg-emerald-500/15 border-emerald-500/40 text-emerald-300";
+    el.classList.remove("hidden");
+  }
+
+  function updateConfidenceSliderUI(val) {
+    document.getElementById("conf-slider-value").textContent =
+      `${Number(val).toFixed(0)}%`;
+  }
+
+  function updateStrideBadge(val) {
+    const n = Number(val);
+    const badge = document.getElementById("stride-badge");
+    if (!Number.isFinite(n) || n < 1 || n > 60) {
+      badge.className =
+        "px-2.5 py-0.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] font-semibold";
+      badge.textContent = "Ngoài phạm vi (1–60)";
+    } else if (n <= 3) {
+      badge.className =
+        "px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[11px] font-semibold";
+      badge.textContent = "Rất mượt • Tải cao";
+    } else if (n <= 10) {
+      badge.className =
+        "px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold";
+      badge.textContent = "Cân bằng tối ưu";
+    } else {
+      badge.className =
+        "px-2.5 py-0.5 rounded-lg bg-sky-500/15 border border-sky-500/40 text-sky-300 text-[11px] font-semibold";
+      badge.textContent = "Tiết kiệm tài nguyên";
+    }
+  }
+
+  async function saveConfig(e) {
+    e.preventDefault();
+    const strideVal = parseInt(
+      document.getElementById("inference_stride").value,
+      10,
+    );
+    const confVal = parseFloat(
+      document.getElementById("confidence_threshold").value,
+    );
+
+    if (Number.isNaN(strideVal) || strideVal < 1 || strideVal > 60) {
+      showCfgToast(
+        "Bước trượt dự đoán phải nằm trong khoảng từ 1 đến 60 khung hình.",
+        true,
+      );
+      return;
+    }
+
+    const payload = {
+      camera_source: document.getElementById("camera_source").value,
+      ear_thresh_1: parseFloat(document.getElementById("ear_thresh_1").value),
+      ear_thresh_2: parseFloat(document.getElementById("ear_thresh_2").value),
+      perclos_thresh_1: parseFloat(
+        document.getElementById("perclos_thresh_1").value,
+      ),
+      perclos_thresh_2: parseFloat(
+        document.getElementById("perclos_thresh_2").value,
+      ),
+      max_neck_angle: parseFloat(
+        document.getElementById("max_neck_angle").value,
+      ),
+      max_shoulder_tilt: parseFloat(
+        document.getElementById("max_shoulder_tilt").value,
+      ),
+      max_rula_score: parseFloat(
+        document.getElementById("max_rula_score").value,
+      ),
+      confidence_threshold: confVal,
+      inference_stride: strideVal,
+    };
+
+    const res = await fetch("/api/admin/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    showCfgToast(data.message || data.detail, !res.ok);
+  }
+
+  async function uploadWeights() {
+    const input = document.getElementById("weights-file-input");
+    if (!input.files || !input.files[0]) {
+      showCfgToast(
+        "Vui lòng chọn tệp trọng số (.pth) trước khi tải lên.",
+        true,
+      );
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", input.files[0]);
+    const res = await fetch("/api/admin/upload-weights", {
+      method: "POST",
+      body: fd,
+    });
+    const data = await res.json();
+    showCfgToast(data.message || data.detail, !res.ok);
+    if (res.ok && data.active_model_path) {
+      document.getElementById("active-model-text").textContent =
+        data.active_model_path;
+    }
+  }
+
+  async function startTraining() {
+    const fd = new FormData();
+    const zipInput = document.getElementById("dataset-zip-input");
+    if (zipInput.files && zipInput.files[0]) {
+      fd.append("dataset_zip", zipInput.files[0]);
+    }
+    fd.append("epochs", document.getElementById("train-epochs").value);
+    fd.append(
+      "skip_extraction",
+      document.getElementById("chk-skip-extract").checked,
+    );
+    fd.append(
+      "replace_existing",
+      document.getElementById("chk-replace-imgs").checked,
+    );
+
+    const res = await fetch("/api/admin/train-model", {
+      method: "POST",
+      body: fd,
+    });
+    const data = await res.json();
+    showCfgToast(data.message || data.detail, !res.ok);
+    pollTrainStatus();
+  }
+
+  async function pollTrainStatus() {
+    try {
+      const res = await fetch("/api/admin/train-status");
+      if (!res.ok) return;
+      const st = await res.json();
+      const pct = Number(st.progress_pct || 0);
+      document.getElementById("train-status-msg").textContent =
+        st.message || "Sẵn sàng";
+      document.getElementById("train-pct-text").textContent = `${pct}%`;
+      document.getElementById("train-progress-bar").style.width =
+        `${Math.min(100, pct)}%`;
+      document.getElementById("btn-start-train").disabled = Boolean(
+        st.is_running,
+      );
+    } catch (e) {}
+  }
+
+  updateStrideBadge(document.getElementById("inference_stride").value);
+  setInterval(pollTrainStatus, 2500);
+  pollTrainStatus();
+</script>
+{% endblock %}

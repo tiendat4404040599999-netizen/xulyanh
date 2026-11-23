@@ -1,0 +1,919 @@
+{% extends "base.html" %} {% block title %}Giám sát và phân tích trực tuyến{%
+endblock %} {% block content %}
+<div class="space-y-4">
+  <!-- Thanh tiêu đề & thao tác phiên -->
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <h2 class="text-xl font-bold text-white tracking-tight">
+        Giám sát trực tuyến
+      </h2>
+      <span
+        id="drowsiness-pill"
+        class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border border-slate-700 bg-slate-800/70 text-slate-300 transition-all"
+      >
+        <span
+          id="drowsiness-lamp"
+          class="w-2 h-2 rounded-full bg-slate-400"
+        ></span>
+        <span id="drowsiness-lvl-text">Chế độ chờ</span>
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2.5">
+      <button
+        id="btn-mute"
+        type="button"
+        onclick="toggleAlarmMute()"
+        class="px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition"
+      >
+        Âm thanh: BẬT
+      </button>
+      <button
+        id="btn-save-session"
+        type="button"
+        onclick="saveCurrentSession()"
+        disabled
+        class="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+      >
+        Lưu phiên (<span id="logged-sec">0</span>s)
+      </button>
+    </div>
+  </div>
+
+  <!-- Banner cảnh báo buồn ngủ (chỉ hiện khi camera đang chạy và đạt Mức 1 / Mức 2) -->
+  <div
+    id="drowsiness-alert-box"
+    class="hidden p-3.5 rounded-xl border text-sm font-semibold flex flex-wrap items-center justify-between gap-2"
+  >
+    <span id="drowsiness-msg">Sẵn sàng giám sát</span>
+    <span class="text-xs font-mono opacity-85">
+      EAR: <strong id="alert-ear">0.000</strong> • PERCLOS:
+      <strong id="alert-perclos">0.0%</strong>
+    </span>
+  </div>
+
+  <!-- Thanh thông báo kết quả thao tác -->
+  <div
+    id="monitor-toast"
+    class="hidden p-3 rounded-xl text-xs font-medium border flex flex-wrap items-center justify-between gap-2"
+  >
+    <span id="monitor-toast-text"></span>
+    <a
+      id="monitor-toast-link"
+      href="/history"
+      class="hidden underline font-bold text-cyan-300 hover:text-cyan-200"
+    >
+      Xem trong Lịch sử & Thống kê →
+    </a>
+  </div>
+
+  <!-- Bố cục 2 cột chính -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+    <!-- Cột trái: Khung Video 1280x720 + Lớp chờ thông minh + Điều khiển -->
+    <div class="lg:col-span-8 space-y-3">
+      <div
+        class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl"
+      >
+        <!-- Khung hiển thị luồng hình ảnh -->
+        <div
+          class="aspect-video bg-slate-950 relative flex items-center justify-center overflow-hidden"
+        >
+          <img
+            id="video-feed"
+            src="/api/monitor/video-feed"
+            alt="Luồng Video 1280x720"
+            class="w-full h-full object-cover transition-transform duration-200"
+          />
+
+          <!-- Lớp phủ màn hình chờ khi chưa bật hoặc vừa tắt camera (tránh lật ngược chữ OpenCV) -->
+          <div
+            id="standby-overlay"
+            class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center transition-opacity"
+          >
+            <div
+              class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center mb-3"
+            >
+              <svg
+                class="w-7 h-7 text-cyan-400"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <h3 id="standby-title" class="text-base font-bold text-slate-100">
+              Camera đang ở chế độ chờ (1280 × 720)
+            </h3>
+            <p
+              id="standby-subtitle"
+              class="text-xs text-slate-400 mt-1 max-w-md"
+            >
+              Bấm "Bật Camera" hoặc chọn tệp video bên dưới để bắt đầu trích
+              xuất 22 đặc trưng và suy luận 60 khung hình.
+            </p>
+
+            <!-- Khối thông báo dữ liệu giữ lại sau khi bấm Tắt -->
+            <div
+              id="standby-retained-box"
+              class="hidden mt-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/35 max-w-md w-full space-y-2.5"
+            >
+              <div class="text-xs text-emerald-300 font-medium">
+                Đã ngắt kết nối webcam và giải phóng bộ đệm (<strong
+                  >0/60</strong
+                >
+                khung hình).<br />
+                Đang giữ lại
+                <strong
+                  id="standby-retained-sec"
+                  class="text-emerald-200 font-mono"
+                  >0</strong
+                >
+                giây dữ liệu đã thu thập.
+              </div>
+              <button
+                id="btn-standby-save"
+                type="button"
+                onclick="saveCurrentSession()"
+                class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+              >
+                Lưu phiên vào cơ sở dữ liệu ngay
+              </button>
+            </div>
+          </div>
+
+          <!-- Pill kính mờ góc trên-trái -->
+          <div
+            class="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/70 backdrop-blur-md border border-white/10 text-[11px] font-medium text-slate-200"
+          >
+            <span
+              id="live-dot"
+              class="w-2 h-2 rounded-full bg-slate-500"
+            ></span>
+            <span id="live-status-text">STANDBY</span>
+            <span class="text-slate-500">|</span>
+            <span class="font-mono text-cyan-300">1280×720</span>
+            <span class="text-slate-500">|</span>
+            <span class="font-mono text-slate-300"
+              >Win
+              <strong id="val-buffer" class="text-white">0/60</strong></span
+            >
+          </div>
+
+          <!-- Pill kính mờ góc dưới-trái -->
+          <div
+            id="hud-bottom-pill"
+            class="hidden absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-3 px-3.5 py-1.5 rounded-full bg-slate-950/70 backdrop-blur-md border border-white/10 text-[11px] font-mono text-slate-200"
+          >
+            <span
+              >EAR
+              <strong id="val-ear" class="text-cyan-300">0.000</strong></span
+            >
+            <span
+              >PERCLOS
+              <strong id="val-perclos" class="text-cyan-300">0.0%</strong></span
+            >
+            <span
+              >Chớp
+              <strong id="val-blink" class="text-cyan-300">0.0</strong>/p</span
+            >
+            <span class="hidden sm:inline text-slate-500">|</span>
+            <span class="hidden sm:inline">
+              Đầu P:<strong id="val-pitch" class="text-amber-300">0</strong>°
+              Y:<strong id="val-yaw" class="text-amber-300">0</strong>°
+              R:<strong id="val-roll" class="text-amber-300">0</strong>°
+            </span>
+          </div>
+        </div>
+
+        <!-- Thanh công cụ dưới khung hình -->
+        <div class="p-3.5 bg-slate-900/95 border-t border-slate-800 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <button
+                id="btn-start-camera"
+                type="button"
+                onclick="startCamera()"
+                class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition shadow-md shadow-cyan-500/20 disabled:opacity-45 disabled:cursor-not-allowed"
+              >
+                Bật Camera
+              </button>
+              <button
+                id="btn-stop-stream"
+                type="button"
+                onclick="stopStream()"
+                disabled
+                class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-md shadow-rose-600/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                Tắt
+              </button>
+            </div>
+
+            <!-- Tùy chọn hiển thị & lớp phủ Overlay -->
+            <div
+              class="flex flex-wrap items-center gap-4 text-xs text-slate-300"
+            >
+              <label
+                class="inline-flex items-center gap-1.5 cursor-pointer select-none"
+              >
+                <input
+                  id="chk-mirror"
+                  type="checkbox"
+                  checked
+                  onchange="applyMirrorState()"
+                  class="w-3.5 h-3.5 accent-cyan-400 rounded"
+                />
+                <span>Lật gương</span>
+              </label>
+              <label
+                class="inline-flex items-center gap-1.5 cursor-pointer select-none"
+              >
+                <input
+                  id="chk-face-overlay"
+                  type="checkbox"
+                  checked
+                  onchange="syncOverlays()"
+                  class="w-3.5 h-3.5 accent-cyan-400 rounded"
+                />
+                <span>Khung mặt</span>
+              </label>
+              <label
+                class="inline-flex items-center gap-1.5 cursor-pointer select-none"
+              >
+                <input
+                  id="chk-pose-overlay"
+                  type="checkbox"
+                  checked
+                  onchange="syncOverlays()"
+                  class="w-3.5 h-3.5 accent-cyan-400 rounded"
+                />
+                <span>Thanh tư thế</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Tải lên & phân tích video -->
+          <div
+            class="pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center gap-2.5"
+          >
+            <input
+              id="video-file-input"
+              type="file"
+              accept="video/*"
+              class="text-xs text-slate-400 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-cyan-300 hover:file:bg-slate-700 cursor-pointer"
+            />
+            <button
+              id="btn-upload-video"
+              type="button"
+              onclick="uploadVideo()"
+              class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition disabled:opacity-45 disabled:cursor-not-allowed"
+            >
+              Phân tích Video
+            </button>
+            <div
+              id="video-progress-wrap"
+              class="hidden flex-1 min-w-[160px] flex items-center gap-2"
+            >
+              <div
+                class="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden"
+              >
+                <div
+                  id="video-progress-bar"
+                  class="h-full bg-indigo-400 transition-all"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <span
+                id="video-progress-text"
+                class="text-[11px] font-mono text-indigo-300"
+                >0%</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cột phải: Thẻ cảm xúc, Công thái học EPI/RULA & 15 xác suất -->
+    <div class="lg:col-span-4 space-y-4">
+      <!-- Trạng thái cảm xúc chủ đạo -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <div
+          class="flex items-center justify-between text-[11px] text-slate-400 uppercase tracking-wider font-semibold"
+        >
+          <span>Trạng thái cảm xúc chủ đạo</span>
+          <span
+            id="top-emotion-conf"
+            class="font-mono text-cyan-300 font-bold text-xs"
+            >0.0%</span
+          >
+        </div>
+        <div
+          id="top-emotion-label"
+          class="text-2xl font-extrabold text-white mt-1.5 truncate"
+        >
+          Chưa khởi động
+        </div>
+        <div
+          class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-3"
+        >
+          <div
+            id="top-emotion-bar"
+            class="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-300"
+            style="width: 0%"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Công thái học tư thế EPI & RULA -->
+      <div
+        id="ergo-card"
+        class="bg-slate-900 border border-emerald-500/35 rounded-2xl p-4 transition-all"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <span
+            class="text-[11px] uppercase tracking-wider font-semibold text-slate-400"
+            >Công thái học tư thế</span
+          >
+          <span
+            id="posture-badge"
+            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300"
+          >
+            Tư thế chuẩn
+          </span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div
+            class="p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 text-center"
+          >
+            <div class="text-[11px] text-slate-400">Chỉ số EPI</div>
+            <div
+              id="val-epi"
+              class="text-2xl font-extrabold text-emerald-400 mt-0.5 font-mono"
+            >
+              100.0
+            </div>
+          </div>
+          <div
+            class="p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 text-center"
+          >
+            <div class="text-[11px] text-slate-400">Điểm RULA</div>
+            <div
+              id="val-rula"
+              class="text-2xl font-extrabold text-emerald-400 mt-0.5 font-mono"
+            >
+              1.0
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bảng xác suất 15 trạng thái cảm xúc -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3
+            class="text-[11px] uppercase tracking-wider font-semibold text-slate-400"
+          >
+            Phân bổ 15 trạng thái cảm xúc
+          </h3>
+          <span class="text-[10px] text-slate-500">BiGRU 60f</span>
+        </div>
+        <div
+          id="probs-container"
+          class="space-y-2 max-h-[295px] overflow-y-auto pr-1.5 text-xs"
+        >
+          <p class="text-slate-500 text-center py-6">
+            Bật camera hoặc chọn video để bắt đầu phân tích...
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let alarmMuted = false;
+  let lastBeepTime = 0;
+  let audioCtx = null;
+
+  let isActionPending = false;
+  let isStreamRunning = false;
+  let currentStreamMode = "idle";
+  let currentLoggedSeconds = 0;
+  let hasUnsavedData = false;
+  let overlaysSyncedOnce = false;
+  let lastShownError = null;
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function applyMirrorState() {
+    const img = document.getElementById("video-feed");
+    const wantMirror = document.getElementById("chk-mirror").checked;
+    // Chỉ lật gương khi luồng camera trực tiếp đang chạy (không lật màn hình chờ hoặc video tải lên)
+    if (wantMirror && isStreamRunning && currentStreamMode === "camera") {
+      img.classList.add("-scale-x-100");
+    } else {
+      img.classList.remove("-scale-x-100");
+    }
+  }
+
+  function showMonitorToast(msg, isErr = false, showHistoryLink = false) {
+    const el = document.getElementById("monitor-toast");
+    const textEl = document.getElementById("monitor-toast-text");
+    const linkEl = document.getElementById("monitor-toast-link");
+
+    textEl.textContent = msg;
+    if (showHistoryLink && !isErr) {
+      linkEl.classList.remove("hidden");
+    } else {
+      linkEl.classList.add("hidden");
+    }
+
+    el.className = isErr
+      ? "p-3 rounded-xl text-xs font-medium border flex flex-wrap items-center justify-between gap-2 bg-rose-500/15 border-rose-500/40 text-rose-300"
+      : "p-3 rounded-xl text-xs font-medium border flex flex-wrap items-center justify-between gap-2 bg-emerald-500/15 border-emerald-500/40 text-emerald-300";
+    el.classList.remove("hidden");
+  }
+
+  function toggleAlarmMute() {
+    alarmMuted = !alarmMuted;
+    document.getElementById("btn-mute").textContent = alarmMuted
+      ? "Âm thanh: TẮT"
+      : "Âm thanh: BẬT";
+  }
+
+  function playDrowsinessAlarm() {
+    if (alarmMuted || !isStreamRunning) return;
+    const now = Date.now();
+    if (now - lastBeepTime < 1400) return;
+    lastBeepTime = now;
+    try {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new Ctx();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioCtx.currentTime + 0.45,
+      );
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.45);
+    } catch (e) {}
+  }
+
+  function confirmDiscardUnsavedIfNeeded() {
+    if (!isStreamRunning && hasUnsavedData && currentLoggedSeconds > 0) {
+      return window.confirm(
+        `Bạn đang có ${currentLoggedSeconds} giây dữ liệu đã thu thập nhưng chưa lưu phiên.\n` +
+          "Khởi chạy luồng mới sẽ xóa dữ liệu tạm này. Bạn vẫn muốn tiếp tục?",
+      );
+    }
+    return true;
+  }
+
+  async function startCamera() {
+    if (isActionPending) return;
+    if (!confirmDiscardUnsavedIfNeeded()) return;
+
+    const startBtn = document.getElementById("btn-start-camera");
+    isActionPending = true;
+    startBtn.disabled = true;
+    startBtn.textContent = "Đang bật...";
+
+    try {
+      const res = await fetch("/api/monitor/start-camera", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        hasUnsavedData = true;
+        lastShownError = null;
+      }
+      showMonitorToast(data.message || data.detail, !res.ok);
+    } catch (e) {
+      showMonitorToast("Không thể kết nối máy chủ để bật camera.", true);
+    } finally {
+      isActionPending = false;
+      startBtn.textContent = "Bật Camera";
+      await fetchAndRenderState();
+    }
+  }
+
+  async function stopStream() {
+    if (isActionPending || !isStreamRunning) return;
+
+    const stopBtn = document.getElementById("btn-stop-stream");
+    isActionPending = true;
+    stopBtn.disabled = true;
+    stopBtn.textContent = "Đang tắt...";
+
+    try {
+      const res = await fetch("/api/monitor/stop", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        isStreamRunning = false;
+        currentStreamMode = "idle";
+        const retained = Number(data.retained_seconds || 0);
+        if (retained > 0) {
+          currentLoggedSeconds = retained;
+          hasUnsavedData = true;
+        }
+        // Đặt ngay chỉ số bộ đệm về 0/60 để phản hồi tức thì
+        document.getElementById("val-buffer").textContent = "0/60";
+        applyMirrorState();
+      }
+      showMonitorToast(data.message || data.detail, !res.ok);
+    } catch (e) {
+      showMonitorToast("Không thể gửi lệnh dừng camera tới máy chủ.", true);
+    } finally {
+      isActionPending = false;
+      stopBtn.textContent = "Tắt";
+      await fetchAndRenderState();
+    }
+  }
+
+  async function syncOverlays() {
+    const showFace = document.getElementById("chk-face-overlay").checked;
+    const showPose = document.getElementById("chk-pose-overlay").checked;
+    try {
+      await fetch("/api/monitor/overlays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          show_face_overlay: showFace,
+          show_pose_overlay: showPose,
+        }),
+      });
+    } catch (e) {}
+  }
+
+  async function uploadVideo() {
+    if (isActionPending) return;
+    const input = document.getElementById("video-file-input");
+    if (!input.files || !input.files[0]) {
+      showMonitorToast("Vui lòng chọn một tệp video trước khi tải lên.", true);
+      return;
+    }
+    if (!confirmDiscardUnsavedIfNeeded()) return;
+
+    const upBtn = document.getElementById("btn-upload-video");
+    isActionPending = true;
+    upBtn.disabled = true;
+    upBtn.textContent = "Đang tải lên...";
+
+    try {
+      const fd = new FormData();
+      fd.append("file", input.files[0]);
+      showMonitorToast("Đang tải tệp video lên máy chủ...", false);
+      const res = await fetch("/api/monitor/upload-video", {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        hasUnsavedData = true;
+        lastShownError = null;
+      }
+      showMonitorToast(data.message || data.detail, !res.ok);
+    } catch (e) {
+      showMonitorToast("Lỗi kết nối khi tải video lên máy chủ.", true);
+    } finally {
+      isActionPending = false;
+      upBtn.disabled = false;
+      upBtn.textContent = "Phân tích Video";
+      await fetchAndRenderState();
+    }
+  }
+
+  async function saveCurrentSession() {
+    if (isActionPending || currentLoggedSeconds <= 0) return;
+
+    const saveBtn = document.getElementById("btn-save-session");
+    const standbySaveBtn = document.getElementById("btn-standby-save");
+    isActionPending = true;
+    saveBtn.disabled = true;
+    if (standbySaveBtn) standbySaveBtn.disabled = true;
+
+    try {
+      const res = await fetch("/api/monitor/save-session", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        hasUnsavedData = false;
+        showMonitorToast(data.message, false, true);
+      } else {
+        showMonitorToast(data.detail || "Không thể lưu phiên làm việc.", true);
+      }
+    } catch (e) {
+      showMonitorToast("Lỗi kết nối khi lưu phiên làm việc.", true);
+    } finally {
+      isActionPending = false;
+      if (standbySaveBtn) standbySaveBtn.disabled = false;
+      await fetchAndRenderState();
+    }
+  }
+
+  function updateErgonomicsUI(epi, rula, color) {
+    document.getElementById("val-epi").textContent = Number(epi).toFixed(1);
+    document.getElementById("val-rula").textContent = Number(rula).toFixed(1);
+    const card = document.getElementById("ergo-card");
+    const badge = document.getElementById("posture-badge");
+    const epiEl = document.getElementById("val-epi");
+    const rulaEl = document.getElementById("val-rula");
+
+    if (color === "red") {
+      card.className =
+        "bg-slate-900 border border-rose-500/70 rounded-2xl p-4 transition-all";
+      badge.className =
+        "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300";
+      badge.textContent = "Sai tư thế";
+      epiEl.className =
+        "text-2xl font-extrabold text-rose-400 mt-0.5 font-mono";
+      rulaEl.className =
+        "text-2xl font-extrabold text-rose-400 mt-0.5 font-mono";
+    } else if (color === "yellow") {
+      card.className =
+        "bg-slate-900 border border-amber-500/60 rounded-2xl p-4 transition-all";
+      badge.className =
+        "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300";
+      badge.textContent = "Hơi lệch";
+      epiEl.className =
+        "text-2xl font-extrabold text-amber-400 mt-0.5 font-mono";
+      rulaEl.className =
+        "text-2xl font-extrabold text-amber-400 mt-0.5 font-mono";
+    } else {
+      card.className =
+        "bg-slate-900 border border-emerald-500/35 rounded-2xl p-4 transition-all";
+      badge.className =
+        "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300";
+      badge.textContent = "Tư thế chuẩn";
+      epiEl.className =
+        "text-2xl font-extrabold text-emerald-400 mt-0.5 font-mono";
+      rulaEl.className =
+        "text-2xl font-extrabold text-emerald-400 mt-0.5 font-mono";
+    }
+  }
+
+  function updateDrowsinessUI(running, level, message, ear, perclos) {
+    const pill = document.getElementById("drowsiness-pill");
+    const lamp = document.getElementById("drowsiness-lamp");
+    const lvlText = document.getElementById("drowsiness-lvl-text");
+    const alertBox = document.getElementById("drowsiness-alert-box");
+
+    if (!running) {
+      pill.className =
+        "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border border-slate-700 bg-slate-800/70 text-slate-300";
+      lamp.className = "w-2 h-2 rounded-full bg-slate-400";
+      lvlText.textContent =
+        currentLoggedSeconds > 0 ? "Đã dừng • Giữ dữ liệu phiên" : "Chế độ chờ";
+      alertBox.className = "hidden";
+      return;
+    }
+
+    document.getElementById("drowsiness-msg").textContent = message;
+    document.getElementById("alert-ear").textContent = Number(ear || 0).toFixed(
+      3,
+    );
+    document.getElementById("alert-perclos").textContent =
+      `${Number(perclos || 0).toFixed(1)}%`;
+
+    if (level === 2) {
+      pill.className =
+        "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border border-rose-500 bg-rose-500/20 text-rose-300 animate-pulse";
+      lamp.className = "w-2 h-2 rounded-full bg-rose-500";
+      lvlText.textContent = "Mức 2 • NGUY HIỂM";
+      alertBox.className =
+        "p-3.5 rounded-xl border-2 border-rose-500 bg-rose-600/20 text-rose-200 text-sm font-bold flex flex-wrap items-center justify-between gap-2 animate-pulse";
+      playDrowsinessAlarm();
+    } else if (level === 1) {
+      pill.className =
+        "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border border-amber-500/60 bg-amber-500/15 text-amber-300";
+      lamp.className = "w-2 h-2 rounded-full bg-amber-400";
+      lvlText.textContent = "Mức 1 • Mệt mỏi";
+      alertBox.className =
+        "p-3 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-200 text-xs font-semibold flex flex-wrap items-center justify-between gap-2";
+    } else {
+      pill.className =
+        "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+      lamp.className = "w-2 h-2 rounded-full bg-emerald-400";
+      lvlText.textContent = "Mức 0 • Tỉnh táo";
+      alertBox.className = "hidden";
+    }
+  }
+
+  function updateStandbyOverlay(running, loggedSec) {
+    const overlay = document.getElementById("standby-overlay");
+    const hudBottom = document.getElementById("hud-bottom-pill");
+    const titleEl = document.getElementById("standby-title");
+    const subEl = document.getElementById("standby-subtitle");
+    const retainedBox = document.getElementById("standby-retained-box");
+    const retainedSecEl = document.getElementById("standby-retained-sec");
+    const standbySaveBtn = document.getElementById("btn-standby-save");
+
+    if (running) {
+      overlay.classList.add("hidden");
+      hudBottom.classList.remove("hidden");
+      return;
+    }
+
+    overlay.classList.remove("hidden");
+    hudBottom.classList.add("hidden");
+
+    if (loggedSec > 0) {
+      titleEl.textContent = "Đã dừng luồng giám sát";
+      subEl.textContent = hasUnsavedData
+        ? "Dữ liệu phiên vẫn được giữ lại nguyên vẹn để bạn lưu vào cơ sở dữ liệu."
+        : "Phiên làm việc này đã được lưu. Bạn có thể bấm 'Bật Camera' để bắt đầu phiên mới.";
+      retainedSecEl.textContent = loggedSec;
+      retainedBox.classList.remove("hidden");
+      if (standbySaveBtn) {
+        standbySaveBtn.textContent = hasUnsavedData
+          ? "Lưu phiên vào cơ sở dữ liệu ngay"
+          : "Lưu thêm một bản sao nữa";
+      }
+    } else {
+      titleEl.textContent = "Camera đang ở chế độ chờ (1280 × 720)";
+      subEl.textContent =
+        "Bấm 'Bật Camera' hoặc chọn tệp video bên dưới để bắt đầu trích xuất 22 đặc trưng và suy luận 60 khung hình.";
+      retainedBox.classList.add("hidden");
+    }
+  }
+
+  async function fetchAndRenderState() {
+    try {
+      const res = await fetch("/api/monitor/state");
+      if (!res.ok) return;
+      const s = await res.json();
+
+      const prevLogged = currentLoggedSeconds;
+      isStreamRunning = Boolean(s.running);
+      currentStreamMode = s.mode || "idle";
+      currentLoggedSeconds = Number(s.logged_seconds || 0);
+
+      // Nếu bộ đếm giây tăng lên trong lúc đang chạy -> đánh dấu có dữ liệu mới chưa lưu
+      if (isStreamRunning && currentLoggedSeconds > prevLogged) {
+        hasUnsavedData = true;
+      }
+
+      // Đồng bộ trạng thái 2 checkbox overlay lần đầu tải trang
+      if (!overlaysSyncedOnce) {
+        document.getElementById("chk-face-overlay").checked =
+          s.show_face_overlay !== false;
+        document.getElementById("chk-pose-overlay").checked =
+          s.show_pose_overlay !== false;
+        overlaysSyncedOnce = true;
+      }
+
+      applyMirrorState();
+      updateStandbyOverlay(isStreamRunning, currentLoggedSeconds);
+
+      const liveDot = document.getElementById("live-dot");
+      const liveText = document.getElementById("live-status-text");
+      if (isStreamRunning) {
+        liveDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+        liveText.textContent =
+          currentStreamMode === "camera" ? "LIVE" : "VIDEO";
+      } else {
+        liveDot.className = "w-2 h-2 rounded-full bg-slate-500";
+        liveText.textContent = "STANDBY";
+      }
+
+      const confVal = Number(s.confidence || 0);
+      document.getElementById("val-buffer").textContent =
+        `${s.buffer_count || 0}/60`;
+      document.getElementById("top-emotion-label").textContent =
+        s.emotion_label || "Chưa khởi động";
+      document.getElementById("top-emotion-conf").textContent =
+        `${confVal.toFixed(1)}%`;
+      document.getElementById("top-emotion-bar").style.width =
+        `${Math.min(100, confVal)}%`;
+
+      document.getElementById("val-ear").textContent = Number(
+        s.ear || 0,
+      ).toFixed(3);
+      document.getElementById("val-perclos").textContent =
+        `${Number(s.perclos || 0).toFixed(1)}%`;
+      document.getElementById("val-blink").textContent = Number(
+        s.blink_rate || 0,
+      ).toFixed(1);
+      document.getElementById("val-pitch").textContent = Number(
+        s.pitch || 0,
+      ).toFixed(0);
+      document.getElementById("val-yaw").textContent = Number(
+        s.yaw || 0,
+      ).toFixed(0);
+      document.getElementById("val-roll").textContent = Number(
+        s.roll || 0,
+      ).toFixed(0);
+      document.getElementById("logged-sec").textContent = currentLoggedSeconds;
+
+      // Cập nhật trạng thái nút điều khiển (không ghi đè khi đang gửi request)
+      if (!isActionPending) {
+        const startBtn = document.getElementById("btn-start-camera");
+        const stopBtn = document.getElementById("btn-stop-stream");
+        const saveBtn = document.getElementById("btn-save-session");
+
+        if (startBtn) startBtn.disabled = isStreamRunning;
+        if (stopBtn) stopBtn.disabled = !isStreamRunning;
+        if (saveBtn) {
+          saveBtn.disabled = currentLoggedSeconds <= 0;
+          if (!isStreamRunning && currentLoggedSeconds > 0 && hasUnsavedData) {
+            saveBtn.classList.add(
+              "ring-2",
+              "ring-emerald-300",
+              "animate-pulse",
+            );
+          } else {
+            saveBtn.classList.remove(
+              "ring-2",
+              "ring-emerald-300",
+              "animate-pulse",
+            );
+          }
+        }
+      }
+
+      updateErgonomicsUI(
+        s.epi_score || 100,
+        s.rula_score || 1,
+        s.posture_color || "green",
+      );
+      updateDrowsinessUI(
+        isStreamRunning,
+        s.drowsiness_level || 0,
+        s.alert_message || "Sẵn sàng giám sát",
+        s.ear,
+        s.perclos,
+      );
+
+      const progWrap = document.getElementById("video-progress-wrap");
+      if (
+        currentStreamMode === "video_processing" ||
+        currentStreamMode === "video_replay"
+      ) {
+        progWrap.classList.remove("hidden");
+        const pct = s.video_progress_pct || 0;
+        document.getElementById("video-progress-bar").style.width = `${pct}%`;
+        document.getElementById("video-progress-text").textContent =
+          currentStreamMode === "video_replay" ? "100% (Phát lại)" : `${pct}%`;
+      } else {
+        progWrap.classList.add("hidden");
+      }
+
+      if (s.error_message && s.error_message !== lastShownError) {
+        lastShownError = s.error_message;
+        showMonitorToast(s.error_message, true);
+      }
+
+      if (Array.isArray(s.probabilities) && s.probabilities.length > 0) {
+        const sorted = [...s.probabilities].sort((a, b) => b.prob - a.prob);
+        const html = sorted
+          .map((item, idx) => {
+            const barColor =
+              idx === 0
+                ? "bg-cyan-400"
+                : idx < 3
+                  ? "bg-sky-500/70"
+                  : "bg-slate-700";
+            const textColor =
+              idx === 0 ? "text-cyan-300 font-bold" : "text-slate-300";
+            return `
+                    <div>
+                        <div class="flex justify-between mb-1 ${textColor}">
+                            <span>${escapeHtml(item.label)}</span>
+                            <span class="font-mono">${Number(item.prob).toFixed(1)}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-800/90 rounded-full overflow-hidden">
+                            <div class="${barColor} h-full transition-all duration-300" style="width: ${Math.min(100, Number(item.prob))}%"></div>
+                        </div>
+                    </div>`;
+          })
+          .join("");
+        document.getElementById("probs-container").innerHTML = html;
+      }
+    } catch (e) {}
+  }
+
+  async function pollLoop() {
+    await fetchAndRenderState();
+    setTimeout(pollLoop, 450);
+  }
+
+  pollLoop();
+</script>
+{% endblock %}

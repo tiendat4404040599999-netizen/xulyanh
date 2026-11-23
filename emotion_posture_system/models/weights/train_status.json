@@ -1,0 +1,189 @@
+{
+  "state": "completed",
+  "current_epoch": 25,
+  "total_epochs": 25,
+  "progress_pct": 100,
+  "device": "cpu",
+  "best_val_loss": 0.1767,
+  "best_val_acc": 94.37,
+  "test_acc": 93.36,
+  "model_path": "D:\\btlxulyanh\\emotion_posture_system\\models\\weights\\best_bigru_model.pth",
+  "message": "Huấn luyện hoàn tất! Độ chính xác tập Test: 93.36%",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.4055,
+      "train_acc": 89.85,
+      "val_loss": 0.2496,
+      "val_acc": 91.92
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.2362,
+      "train_acc": 91.43,
+      "val_loss": 0.2195,
+      "val_acc": 92.35
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.227,
+      "train_acc": 91.96,
+      "val_loss": 0.2172,
+      "val_acc": 92.21
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.2178,
+      "train_acc": 92.14,
+      "val_loss": 0.2274,
+      "val_acc": 92.5
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.2111,
+      "train_acc": 92.26,
+      "val_loss": 0.202,
+      "val_acc": 93.22
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.2063,
+      "train_acc": 92.54,
+      "val_loss": 0.2161,
+      "val_acc": 93.22
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.2087,
+      "train_acc": 92.48,
+      "val_loss": 0.192,
+      "val_acc": 93.65
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.2019,
+      "train_acc": 92.73,
+      "val_loss": 0.2033,
+      "val_acc": 92.64
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.197,
+      "train_acc": 93.01,
+      "val_loss": 0.197,
+      "val_acc": 93.51
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.1988,
+      "train_acc": 92.91,
+      "val_loss": 0.2123,
+      "val_acc": 93.36
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.1932,
+      "train_acc": 92.57,
+      "val_loss": 0.1944,
+      "val_acc": 94.08
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.1886,
+      "train_acc": 93.35,
+      "val_loss": 0.2085,
+      "val_acc": 92.35
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.1817,
+      "train_acc": 93.25,
+      "val_loss": 0.1794,
+      "val_acc": 93.94
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.176,
+      "train_acc": 93.47,
+      "val_loss": 0.179,
+      "val_acc": 93.8
+    },
+    {
+      "epoch": 15,
+      "train_loss": 0.1737,
+      "train_acc": 93.69,
+      "val_loss": 0.1831,
+      "val_acc": 93.94
+    },
+    {
+      "epoch": 16,
+      "train_loss": 0.1755,
+      "train_acc": 93.97,
+      "val_loss": 0.1857,
+      "val_acc": 93.8
+    },
+    {
+      "epoch": 17,
+      "train_loss": 0.1674,
+      "train_acc": 94.03,
+      "val_loss": 0.1767,
+      "val_acc": 94.37
+    },
+    {
+      "epoch": 18,
+      "train_loss": 0.1699,
+      "train_acc": 93.94,
+      "val_loss": 0.1854,
+      "val_acc": 93.8
+    },
+    {
+      "epoch": 19,
+      "train_loss": 0.169,
+      "train_acc": 94.06,
+      "val_loss": 0.1809,
+      "val_acc": 94.23
+    },
+    {
+      "epoch": 20,
+      "train_loss": 0.1696,
+      "train_acc": 93.9,
+      "val_loss": 0.1866,
+      "val_acc": 93.94
+    },
+    {
+      "epoch": 21,
+      "train_loss": 0.1661,
+      "train_acc": 94.03,
+      "val_loss": 0.1947,
+      "val_acc": 94.23
+    },
+    {
+      "epoch": 22,
+      "train_loss": 0.1674,
+      "train_acc": 94.43,
+      "val_loss": 0.1879,
+      "val_acc": 93.8
+    },
+    {
+      "epoch": 23,
+      "train_loss": 0.1622,
+      "train_acc": 94.31,
+      "val_loss": 0.1916,
+      "val_acc": 93.94
+    },
+    {
+      "epoch": 24,
+      "train_loss": 0.1597,
+      "train_acc": 94.37,
+      "val_loss": 0.1843,
+      "val_acc": 94.08
+    },
+    {
+      "epoch": 25,
+      "train_loss": 0.1556,
+      "train_acc": 94.62,
+      "val_loss": 0.2013,
+      "val_acc": 92.93
+    }
+  ]
+}

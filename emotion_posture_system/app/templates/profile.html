@@ -1,0 +1,146 @@
+{% extends "base.html" %} {% block title %}Thông tin cá nhân & Đổi mật khẩu{%
+endblock %} {% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-cyan-400">Hồ sơ tài khoản</h2>
+    <p class="text-sm text-slate-400 mt-1">
+      Cập nhật thông tin cá nhân và thay đổi mật khẩu bảo mật.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Form 1: Cập nhật thông tin cá nhân -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      <h3
+        class="text-lg font-bold text-slate-100 border-b border-slate-800 pb-3"
+      >
+        Thông tin cá nhân
+      </h3>
+
+      {% if message %}
+      <div
+        class="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium"
+      >
+        {{ message }}
+      </div>
+      {% endif %} {% if error %}
+      <div
+        class="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium"
+      >
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <form method="POST" action="/profile" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1"
+            >Tên đăng nhập & Vai trò</label
+          >
+          <input
+            type="text"
+            disabled
+            value="{{ user.username }} ({{ user.role }})"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-400"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Họ và tên</label>
+          <input
+            name="full_name"
+            type="text"
+            required
+            value="{{ user.full_name }}"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Địa chỉ Email</label>
+          <input
+            name="email"
+            type="email"
+            required
+            value="{{ user.email }}"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
+        <button
+          type="submit"
+          class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition"
+        >
+          Lưu thông tin
+        </button>
+      </form>
+    </div>
+
+    <!-- Form 2: Đổi mật khẩu tài khoản -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+      <h3
+        class="text-lg font-bold text-slate-100 border-b border-slate-800 pb-3"
+      >
+        Đổi mật khẩu tài khoản
+      </h3>
+
+      {% if pw_message %}
+      <div
+        class="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium"
+      >
+        {{ pw_message }}
+      </div>
+      {% endif %} {% if pw_error %}
+      <div
+        class="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium"
+      >
+        {{ pw_error }}
+      </div>
+      {% endif %}
+
+      <form
+        method="POST"
+        action="/profile/change-password"
+        class="space-y-4 text-sm"
+      >
+        <div>
+          <label class="block text-xs text-slate-300 mb-1"
+            >Mật khẩu hiện tại</label
+          >
+          <input
+            name="current_password"
+            type="password"
+            required
+            placeholder="Nhập mật khẩu cũ"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Mật khẩu mới</label>
+          <input
+            name="new_password"
+            type="password"
+            required
+            placeholder="Ít nhất 8 ký tự (chữ hoa, thường, số)"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1"
+            >Nhập lại mật khẩu mới</label
+          >
+          <input
+            name="confirm_password"
+            type="password"
+            required
+            placeholder="Xác nhận mật khẩu mới"
+            class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
+        <button
+          type="submit"
+          class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold transition"
+        >
+          Lưu mật khẩu mới
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

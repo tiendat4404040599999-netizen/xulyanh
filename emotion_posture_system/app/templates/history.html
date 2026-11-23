@@ -1,0 +1,837 @@
+{% extends "base.html" %} {% block title %}Lịch sử & Thống kê phiên làm việc{%
+endblock %} {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="space-y-6">
+  {% if user.role == "Admin" %}
+  <input type="hidden" id="is-admin-flag" value="true" />
+  {% else %}
+  <input type="hidden" id="is-admin-flag" value="false" />
+  {% endif %}
+
+  <!-- Tiêu đề & Thanh bộ lọc -->
+  <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+    <div>
+      {% if user.role == "Admin" %}
+      <h2 class="text-2xl font-bold text-cyan-400">
+        Lịch sử phiên toàn hệ thống & Thống kê
+      </h2>
+      <p class="text-sm text-slate-400 mt-1">
+        Tra cứu theo người dùng và khoảng thời gian, theo dõi chủ phiên, xem
+        biểu đồ chi tiết, xuất báo cáo hoặc xóa phiên.
+      </p>
+      {% else %}
+      <h2 class="text-2xl font-bold text-cyan-400">
+        Lịch sử & Thống kê phiên làm việc
+      </h2>
+      <p class="text-sm text-slate-400 mt-1">
+        Tra cứu lịch sử giám sát của bạn theo ngày tháng, xem biểu đồ trực quan,
+        xuất CSV/PDF hoặc xóa các phiên không cần thiết.
+      </p>
+      {% endif %}
+    </div>
+
+    <!-- Bộ lọc người dùng (Admin) & khoảng ngày tháng -->
+    <div
+      class="flex flex-wrap items-end gap-2.5 bg-slate-900 border border-slate-800 p-3 rounded-2xl"
+    >
+      {% if user.role == "Admin" %}
+      <div>
+        <label
+          for="filter-user"
+          class="block text-[11px] text-slate-400 mb-1 font-medium"
+          >Người dùng</label
+        >
+        <select
+          id="filter-user"
+          class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-100 min-w-[190px] focus:outline-none focus:border-cyan-400"
+        >
+          <option value="">Tất cả người dùng</option>
+          {% for u in users_list %}
+          <option value="{{ u.id }}">
+            {{ u.full_name }} ({{ u.username }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div>
+        <label
+          for="filter-start"
+          class="block text-[11px] text-slate-400 mb-1 font-medium"
+          >Từ ngày</label
+        >
+        <input
+          id="filter-start"
+          type="date"
+          class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-cyan-400"
+        />
+      </div>
+      <div>
+        <label
+          for="filter-end"
+          class="block text-[11px] text-slate-400 mb-1 font-medium"
+          >Đến ngày</label
+        >
+        <input
+          id="filter-end"
+          type="date"
+          class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-cyan-400"
+        />
+      </div>
+
+      <button
+        type="button"
+        onclick="loadSessions()"
+        class="px-4 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition"
+      >
+        Lọc dữ liệu
+      </button>
+      <button
+        type="button"
+        onclick="resetFilters()"
+        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+      >
+        Đặt lại
+      </button>
+    </div>
+  </div>
+
+  <!-- Thanh thông báo -->
+  <div
+    id="history-toast"
+    class="hidden p-3.5 rounded-xl text-xs font-medium border"
+  ></div>
+
+  <!-- Thẻ thống kê tổng quan cho tập kết quả đang lọc -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <div
+        class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold"
+      >
+        Tổng số phiên
+      </div>
+      <div
+        id="kpi-total-sessions"
+        class="text-2xl font-extrabold text-white mt-1 font-mono"
+      >
+        0
+      </div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <div
+        class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold"
+      >
+        Tổng thời lượng
+      </div>
+      <div
+        id="kpi-total-duration"
+        class="text-2xl font-extrabold text-cyan-400 mt-1 font-mono"
+      >
+        0s
+      </div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <div
+        class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold"
+      >
+        Điểm RULA trung bình
+      </div>
+      <div
+        id="kpi-avg-rula"
+        class="text-2xl font-extrabold text-emerald-400 mt-1 font-mono"
+      >
+        0.00
+      </div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <div
+        class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold"
+      >
+        Tổng cảnh báo buồn ngủ
+      </div>
+      <div
+        id="kpi-total-alerts"
+        class="text-2xl font-extrabold text-amber-400 mt-1 font-mono"
+      >
+        0
+      </div>
+    </div>
+  </div>
+
+  <!-- Bảng danh sách phiên làm việc + Thanh xóa hàng loạt -->
+  <div
+    class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl"
+  >
+    <div
+      class="px-5 py-3.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3"
+    >
+      <div class="flex items-center gap-2.5">
+        <h3 class="text-sm font-bold text-slate-100">
+          Danh sách phiên giám sát
+        </h3>
+        <span
+          id="selected-counter-badge"
+          class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+        >
+          Đã chọn 0 phiên
+        </span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          id="btn-bulk-delete"
+          type="button"
+          onclick="openBulkDeleteModal()"
+          disabled
+          class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Xóa đã chọn (<span id="bulk-delete-count">0</span>)
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-800/70 text-slate-300 text-xs uppercase">
+            <th class="py-3 px-4 w-10">
+              <input
+                id="chk-select-all"
+                type="checkbox"
+                onchange="toggleSelectAll(this)"
+                class="w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+              />
+            </th>
+            <th class="py-3 px-4">Mã</th>
+            {% if user.role == "Admin" %}
+            <th class="py-3 px-4">Chủ phiên</th>
+            {% endif %}
+            <th class="py-3 px-4">Thời gian bắt đầu</th>
+            <th class="py-3 px-4">Thời lượng</th>
+            <th class="py-3 px-4">Cảm xúc chủ đạo</th>
+            <th class="py-3 px-4">Tập trung TB</th>
+            <th class="py-3 px-4">RULA TB</th>
+            <th class="py-3 px-4">Cảnh báo ngủ</th>
+            <th class="py-3 px-4 text-right">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody id="sessions-tbody" class="divide-y divide-slate-800 text-sm">
+          <tr>
+            <td colspan="10" class="py-8 text-center text-slate-500 text-xs">
+              Đang tải dữ liệu lịch sử...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Khu vực Chi tiết Biểu đồ & Xuất báo cáo -->
+  <div id="detail-section" class="hidden space-y-5 pt-2">
+    <div
+      class="bg-slate-900 border border-cyan-500/30 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4"
+    >
+      <div>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <h3 id="detail-title" class="text-lg font-bold text-cyan-300">
+            Chi tiết phiên #0
+          </h3>
+          <span
+            id="detail-owner-badge"
+            class="hidden px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700"
+          ></span>
+        </div>
+        <p id="detail-comment" class="text-xs text-slate-300 mt-1.5"></p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <a
+          id="btn-export-csv"
+          href="#"
+          class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+        >
+          Xuất báo cáo CSV
+        </a>
+        <a
+          id="btn-export-pdf"
+          href="#"
+          class="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs transition"
+        >
+          Xuất báo cáo PDF
+        </a>
+        <button
+          type="button"
+          onclick="closeDetailPanel()"
+          class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+        >
+          Đóng
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <!-- Biểu đồ đường -->
+      <div
+        class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-5"
+      >
+        <h4
+          class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-3"
+        >
+          Diễn biến Độ tin cậy, Công thái học (EPI) & Buồn ngủ (PERCLOS) theo
+          thời gian
+        </h4>
+        <div class="h-[290px]">
+          <canvas id="line-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Biểu đồ tròn -->
+      <div
+        class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5"
+      >
+        <h4
+          class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-3"
+        >
+          Tỷ lệ chất lượng tư thế ngồi
+        </h4>
+        <div class="h-[290px] flex items-center justify-center">
+          <canvas id="pie-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Biểu đồ cột 15 cảm xúc -->
+      <div
+        class="lg:col-span-12 bg-slate-900 border border-slate-800 rounded-2xl p-5"
+      >
+        <h4
+          class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-3"
+        >
+          Phân bổ xác suất trung bình 15 trạng thái cảm xúc (%)
+        </h4>
+        <div class="h-[280px]">
+          <canvas id="bar-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hộp thoại xác nhận Xóa phiên làm việc -->
+<div
+  id="delete-session-modal"
+  class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+>
+  <div
+    class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4"
+  >
+    <h3 class="text-lg font-bold text-rose-400">Xác nhận xóa phiên làm việc</h3>
+    <p id="delete-modal-desc" class="text-sm text-slate-200"></p>
+    <p
+      class="text-xs text-rose-300/90 bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl"
+    >
+      Lưu ý: Toàn bộ nhật ký theo từng giây và thống kê của phiên đã chọn sẽ bị
+      xóa vĩnh viễn khỏi cơ sở dữ liệu. Không thể hoàn tác.
+    </p>
+    <div class="flex justify-end gap-3 pt-2">
+      <button
+        type="button"
+        onclick="closeDeleteModal()"
+        class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+      >
+        Hủy bỏ
+      </button>
+      <button
+        id="btn-confirm-delete"
+        type="button"
+        onclick="confirmDeleteSessions()"
+        class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition"
+      >
+        Xác nhận xóa
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const isAdmin = document.getElementById("is-admin-flag").value === "true";
+  let currentSessions = [];
+  let selectedIds = new Set();
+  let pendingDeleteIds = [];
+  let currentDetailSessionId = null;
+
+  let lineChartInst = null;
+  let pieChartInst = null;
+  let barChartInst = null;
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function showHistoryToast(msg, isErr = false) {
+    const el = document.getElementById("history-toast");
+    el.textContent = msg;
+    el.className = isErr
+      ? "p-3.5 rounded-xl text-xs font-medium border bg-rose-500/15 border-rose-500/40 text-rose-300"
+      : "p-3.5 rounded-xl text-xs font-medium border bg-emerald-500/15 border-emerald-500/40 text-emerald-300";
+    el.classList.remove("hidden");
+  }
+
+  function formatDuration(sec) {
+    const s = Number(sec || 0);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}p ${rem}s`;
+  }
+
+  function updateSelectionUI() {
+    const count = selectedIds.size;
+    const bulkBtn = document.getElementById("btn-bulk-delete");
+    const countSpan = document.getElementById("bulk-delete-count");
+    const badge = document.getElementById("selected-counter-badge");
+    const selectAllChk = document.getElementById("chk-select-all");
+
+    countSpan.textContent = count;
+    bulkBtn.disabled = count === 0;
+
+    if (count > 0) {
+      badge.textContent = `Đã chọn ${count} phiên`;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+
+    if (currentSessions.length > 0 && count === currentSessions.length) {
+      selectAllChk.checked = true;
+      selectAllChk.indeterminate = false;
+    } else if (count > 0) {
+      selectAllChk.checked = false;
+      selectAllChk.indeterminate = true;
+    } else {
+      selectAllChk.checked = false;
+      selectAllChk.indeterminate = false;
+    }
+  }
+
+  function toggleSelectAll(masterChk) {
+    selectedIds.clear();
+    if (masterChk.checked) {
+      currentSessions.forEach((s) => selectedIds.add(s.id));
+    }
+    document.querySelectorAll(".session-row-chk").forEach((chk) => {
+      chk.checked = masterChk.checked;
+    });
+    updateSelectionUI();
+  }
+
+  function toggleRowSelection(chk) {
+    const id = Number(chk.dataset.sessionId);
+    if (chk.checked) {
+      selectedIds.add(id);
+    } else {
+      selectedIds.delete(id);
+    }
+    updateSelectionUI();
+  }
+
+  function updateSummaryKPIs(sessions) {
+    const total = sessions.length;
+    const totalDur = sessions.reduce(
+      (acc, s) => acc + Number(s.duration_sec || 0),
+      0,
+    );
+    const avgRula =
+      total > 0
+        ? sessions.reduce((acc, s) => acc + Number(s.avg_rula_score || 0), 0) /
+          total
+        : 0;
+    const totalAlerts = sessions.reduce(
+      (acc, s) => acc + Number(s.drowsiness_alerts_count || 0),
+      0,
+    );
+
+    document.getElementById("kpi-total-sessions").textContent = total;
+    document.getElementById("kpi-total-duration").textContent =
+      formatDuration(totalDur);
+    document.getElementById("kpi-avg-rula").textContent = avgRula.toFixed(2);
+    document.getElementById("kpi-total-alerts").textContent = totalAlerts;
+  }
+
+  function resetFilters() {
+    document.getElementById("filter-start").value = "";
+    document.getElementById("filter-end").value = "";
+    const userSel = document.getElementById("filter-user");
+    if (userSel) userSel.value = "";
+    loadSessions();
+  }
+
+  async function loadSessions() {
+    const start = document.getElementById("filter-start").value;
+    const end = document.getElementById("filter-end").value;
+    const userSel = document.getElementById("filter-user");
+    const userId = userSel ? userSel.value : "";
+
+    const params = new URLSearchParams();
+    if (start) params.set("start_date", start);
+    if (end) params.set("end_date", end);
+    if (userId) params.set("user_id", userId);
+
+    const url = params.toString()
+      ? `/api/history/sessions?${params.toString()}`
+      : "/api/history/sessions";
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) {
+        showHistoryToast(
+          data.detail || "Không thể tải danh sách phiên làm việc.",
+          true,
+        );
+        return;
+      }
+
+      currentSessions = data.sessions || [];
+      selectedIds.clear();
+      updateSummaryKPIs(currentSessions);
+      renderSessionsTable(currentSessions);
+      updateSelectionUI();
+    } catch (e) {
+      showHistoryToast("Lỗi kết nối khi tải lịch sử phiên làm việc.", true);
+    }
+  }
+
+  function renderSessionsTable(sessions) {
+    const tbody = document.getElementById("sessions-tbody");
+    const colSpan = isAdmin ? 10 : 9;
+
+    if (!sessions.length) {
+      tbody.innerHTML = `
+            <tr>
+                <td colspan="${colSpan}" class="py-10 text-center text-slate-500 text-xs">
+                    Chưa có phiên làm việc nào phù hợp với bộ lọc hiện tại.
+                </td>
+            </tr>`;
+      return;
+    }
+
+    tbody.innerHTML = sessions
+      .map((s) => {
+        const ownerCell = isAdmin
+          ? `<td class="py-3 px-4">
+                       <div class="font-semibold text-slate-100 text-xs">${escapeHtml(s.full_name)}</div>
+                       <div class="font-mono text-[11px] text-cyan-400">${escapeHtml(s.username)}</div>
+                   </td>`
+          : "";
+
+        const rulaClass =
+          s.avg_rula_score >= 4.5
+            ? "text-rose-400 font-bold"
+            : s.avg_rula_score >= 3.0
+              ? "text-amber-400 font-bold"
+              : "text-emerald-400 font-bold";
+
+        return `
+                <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-4">
+                        <input type="checkbox" class="session-row-chk w-4 h-4 accent-cyan-400 rounded cursor-pointer"
+                               data-session-id="${s.id}" onchange="toggleRowSelection(this)" />
+                    </td>
+                    <td class="py-3 px-4 font-mono text-xs text-slate-400">#${s.id}</td>
+                    ${ownerCell}
+                    <td class="py-3 px-4 text-xs text-slate-300 font-mono">${escapeHtml(s.start_time)}</td>
+                    <td class="py-3 px-4 text-xs font-mono text-cyan-300">${formatDuration(s.duration_sec)}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/15 text-cyan-300">
+                            ${escapeHtml(s.dominant_emotion)}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-xs font-mono text-slate-200">${Number(s.avg_focus_score || 0).toFixed(1)}%</td>
+                    <td class="py-3 px-4 text-xs font-mono ${rulaClass}">${Number(s.avg_rula_score || 0).toFixed(2)}</td>
+                    <td class="py-3 px-4 text-xs font-mono text-amber-300">${s.drowsiness_alerts_count}</td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap space-x-1.5">
+                        <button type="button" onclick="viewSessionDetail(${s.id})"
+                                class="px-3 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border border-cyan-500/35 text-xs font-semibold transition">
+                            Xem biểu đồ
+                        </button>
+                        <button type="button" onclick="openSingleDeleteModal(${s.id})"
+                                class="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-semibold transition">
+                            Xóa
+                        </button>
+                    </td>
+                </tr>`;
+      })
+      .join("");
+  }
+
+  function openSingleDeleteModal(sessionId) {
+    const target = currentSessions.find((s) => s.id === sessionId);
+    pendingDeleteIds = [sessionId];
+
+    const ownerInfo =
+      isAdmin && target
+        ? ` của chủ phiên "${target.full_name}" (${target.username})`
+        : "";
+    const timeInfo = target ? ` (bắt đầu lúc ${target.start_time})` : "";
+    document.getElementById("delete-modal-desc").textContent =
+      `Bạn có chắc chắn muốn xóa phiên làm việc #${sessionId}${ownerInfo}${timeInfo}?`;
+    document.getElementById("delete-session-modal").classList.remove("hidden");
+  }
+
+  function openBulkDeleteModal() {
+    if (selectedIds.size === 0) return;
+    pendingDeleteIds = Array.from(selectedIds);
+    const idPreview = pendingDeleteIds
+      .slice(0, 6)
+      .map((id) => `#${id}`)
+      .join(", ");
+    const suffix =
+      pendingDeleteIds.length > 6
+        ? ` và ${pendingDeleteIds.length - 6} phiên khác`
+        : "";
+    document.getElementById("delete-modal-desc").textContent =
+      `Bạn có chắc chắn muốn xóa ${pendingDeleteIds.length} phiên làm việc đã chọn (${idPreview}${suffix})?`;
+    document.getElementById("delete-session-modal").classList.remove("hidden");
+  }
+
+  function closeDeleteModal() {
+    pendingDeleteIds = [];
+    document.getElementById("delete-session-modal").classList.add("hidden");
+  }
+
+  async function confirmDeleteSessions() {
+    if (pendingDeleteIds.length === 0) return;
+    const idsToDelete = [...pendingDeleteIds];
+    const confirmBtn = document.getElementById("btn-confirm-delete");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Đang xóa...";
+
+    try {
+      let res;
+      if (idsToDelete.length === 1) {
+        res = await fetch(`/api/history/sessions/${idsToDelete[0]}`, {
+          method: "DELETE",
+        });
+      } else {
+        res = await fetch("/api/history/sessions/bulk-delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_ids: idsToDelete }),
+        });
+      }
+
+      const data = await res.json();
+      closeDeleteModal();
+
+      if (!res.ok) {
+        showHistoryToast(data.detail || "Không thể xóa phiên làm việc.", true);
+        return;
+      }
+
+      showHistoryToast(
+        data.message || "Đã xóa phiên làm việc thành công.",
+        false,
+      );
+
+      if (
+        currentDetailSessionId &&
+        idsToDelete.includes(currentDetailSessionId)
+      ) {
+        closeDetailPanel();
+      }
+      await loadSessions();
+    } catch (e) {
+      closeDeleteModal();
+      showHistoryToast("Lỗi kết nối khi xóa phiên làm việc.", true);
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Xác nhận xóa";
+    }
+  }
+
+  function closeDetailPanel() {
+    currentDetailSessionId = null;
+    document.getElementById("detail-section").classList.add("hidden");
+  }
+
+  function normalizeEmotionDist(dist) {
+    if (Array.isArray(dist)) {
+      return dist.map((item) => ({
+        label: item.label || item.emotion || item.name || String(item[0] || ""),
+        value: Number(
+          item.avg_prob ?? item.prob ?? item.value ?? item.pct ?? item[1] ?? 0,
+        ),
+      }));
+    }
+    if (dist && typeof dist === "object") {
+      return Object.entries(dist).map(([k, v]) => ({
+        label: k,
+        value: Number(v || 0),
+      }));
+    }
+    return [];
+  }
+
+  async function viewSessionDetail(sessionId) {
+    try {
+      const res = await fetch(`/api/history/sessions/${sessionId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        showHistoryToast(data.detail || "Không thể tải chi tiết phiên.", true);
+        return;
+      }
+
+      currentDetailSessionId = sessionId;
+      const s = data.session;
+      const stats = data.stats || {};
+      const timeline = data.timeline || [];
+
+      document.getElementById("detail-title").textContent =
+        `Chi tiết phiên #${s.id} • ${s.start_time} (${formatDuration(s.duration_sec)})`;
+      document.getElementById("detail-comment").textContent =
+        s.posture_comment || "";
+
+      const ownerBadge = document.getElementById("detail-owner-badge");
+      if (isAdmin && s.owner_name) {
+        ownerBadge.textContent = `Chủ phiên: ${s.owner_name} (${s.owner_username})`;
+        ownerBadge.classList.remove("hidden");
+      } else {
+        ownerBadge.classList.add("hidden");
+      }
+
+      document.getElementById("btn-export-csv").href =
+        `/api/history/sessions/${sessionId}/export?fmt=csv`;
+      document.getElementById("btn-export-pdf").href =
+        `/api/history/sessions/${sessionId}/export?fmt=pdf`;
+
+      const detailSection = document.getElementById("detail-section");
+      detailSection.classList.remove("hidden");
+      detailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      // 1. Line Chart
+      if (lineChartInst) lineChartInst.destroy();
+      lineChartInst = new Chart(document.getElementById("line-chart"), {
+        type: "line",
+        data: {
+          labels: timeline.map((t) => t.time_label),
+          datasets: [
+            {
+              label: "Chỉ số tư thế EPI",
+              data: timeline.map((t) => t.epi_score),
+              borderColor: "#34d399",
+              backgroundColor: "rgba(52, 211, 153, 0.12)",
+              tension: 0.25,
+              fill: true,
+            },
+            {
+              label: "Độ tin cậy cảm xúc (%)",
+              data: timeline.map((t) => t.confidence),
+              borderColor: "#22d3ee",
+              tension: 0.25,
+              fill: false,
+            },
+            {
+              label: "Buồn ngủ PERCLOS (%)",
+              data: timeline.map((t) => t.perclos),
+              borderColor: "#fb7185",
+              tension: 0.25,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              grid: { color: "rgba(148,163,184,0.12)" },
+              ticks: { color: "#94a3b8" },
+            },
+            x: { grid: { display: false }, ticks: { color: "#94a3b8" } },
+          },
+          plugins: {
+            legend: { labels: { color: "#cbd5e1", font: { size: 11 } } },
+          },
+        },
+      });
+
+      // 2. Pie Chart
+      const pb = stats.posture_breakdown || {
+        green_pct: 0,
+        yellow_pct: 0,
+        red_pct: 0,
+      };
+      if (pieChartInst) pieChartInst.destroy();
+      pieChartInst = new Chart(document.getElementById("pie-chart"), {
+        type: "doughnut",
+        data: {
+          labels: ["Tư thế chuẩn (Xanh)", "Hơi lệch (Vàng)", "Sai tư thế (Đỏ)"],
+          datasets: [
+            {
+              data: [pb.green_pct || 0, pb.yellow_pct || 0, pb.red_pct || 0],
+              backgroundColor: ["#10b981", "#f59e0b", "#f43f5e"],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: { color: "#cbd5e1", font: { size: 11 } },
+            },
+          },
+        },
+      });
+
+      // 3. Bar Chart 15 cảm xúc
+      const distArr = normalizeEmotionDist(stats.emotion_distribution);
+      if (barChartInst) barChartInst.destroy();
+      barChartInst = new Chart(document.getElementById("bar-chart"), {
+        type: "bar",
+        data: {
+          labels: distArr.map((d) => d.label),
+          datasets: [
+            {
+              label: "Xác suất trung bình (%)",
+              data: distArr.map((d) => d.value),
+              backgroundColor: "rgba(34, 211, 238, 0.72)",
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              grid: { color: "rgba(148,163,184,0.12)" },
+              ticks: { color: "#94a3b8" },
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: "#cbd5e1", font: { size: 11 } },
+            },
+          },
+          plugins: { legend: { display: false } },
+        },
+      });
+    } catch (e) {
+      showHistoryToast("Lỗi khi tải chi tiết biểu đồ phiên làm việc.", true);
+    }
+  }
+
+  loadSessions();
+</script>
+{% endblock %}
